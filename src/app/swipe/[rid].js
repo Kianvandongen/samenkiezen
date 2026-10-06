@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { CATS, LVLS, MOODS, INTS, opt } from '../../lib/data';
 import { roundChips } from '../../lib/store';
-import { useStore, mutate, toast, onEvent, rnd, actives, remaining, castVote, unvote, doneCount, nameOf, S as St } from '../../lib/store';
+import { useStore, mutate, toast, onEvent, rnd, actives, remaining, castVote, unvote, doneCount, nameOf, isAdmin, grp, S as St } from '../../lib/store';
 import { useC, F, T, Header, IBtn, Avs, Bar, Tag, Icon, Btn, Thumb, LinkText } from '../../components/ui';
 import { SwipeCard, CardFace } from '../../components/SwipeCard';
 
@@ -38,7 +38,7 @@ export default function Swipe() {
 
   const head = (
     <>
-      <Header title={r.title} right={<View style={{ flexDirection: 'row', gap: 8 }}><IBtn n="info" label="Ronde-informatie" onPress={() => router.push(`/roundinfo/${rid}`)} /><IBtn n="message-circle" label="Chat" onPress={() => router.push({ pathname: '/chat', params: { gid: r.gid, rid } })} /></View>} />
+      <Header title={r.title} right={<View style={{ flexDirection: 'row', gap: 8 }}><IBtn n="sliders" label="Keuzes aanpassen" onPress={() => r.v !== 2 ? toast('Deze oudere ronde kan niet worden aangepast. Start een nieuwe ronde.') : (isAdmin(grp(r.gid)) || r.by === 'me') ? router.push({ pathname: '/wizard', params: { rid } }) : toast('Alleen de maker van de ronde of een beheerder kan de keuzes aanpassen. Vraag het in de chat.')} /><IBtn n="info" label="Ronde-informatie" onPress={() => router.push(`/roundinfo/${rid}`)} /><IBtn n="message-circle" label="Chat" onPress={() => router.push({ pathname: '/chat', params: { gid: r.gid, rid } })} /></View>} />
       <View style={{ paddingHorizontal: 16, gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Avs ids={actives(r).map(m => m.id)} s={22} />

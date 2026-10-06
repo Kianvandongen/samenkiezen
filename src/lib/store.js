@@ -230,7 +230,7 @@ export const vote = (r, p, o) => p === 'me' ? r.votes.me[o] : undefined;
 export const vetoed = (r, o) => r.rule.type === 'veto' && r.vetoed.includes(o);
 export const remaining = r => {
   const idx = {}; r.deck.forEach((o, i) => { idx[o] = i; });
-  const left = r.deck.filter(o => !r.votes.me[o] && !r.saved.includes(o) && !vetoed(r, o) && opt(o));
+  const left = r.deck.filter(o => !r.votes.me[o] && !r.saved.includes(o) && !vetoed(r, o) && opt(o) && !opt(o).hide);
   // Iedereen krijgt grofweg dezelfde volgorde (meer kans op matches); binnen blokken van 20 sorteren persoonlijke voorkeuren.
   return left.sort((a, b) => (Math.floor(idx[a] / 20) - Math.floor(idx[b] / 20)) || (rankScore(opt(b), r) - rankScore(opt(a), r)));
 };
@@ -292,11 +292,13 @@ function failsV2(o, r) {
       return true;
     }
     if (['uiteten', 'bestellen'].includes(m)) {
-      if (!r.cuisAll && r.cuis.length && !(o.cu && r.cuis.includes(o.cu))) return false;
-      if (r.diets.length && !r.diets.every(d => o.di.includes(d))) return false;
+      // Echte plekken zonder bekende keuken of dieetinfo vallen niet weg (onbekend ≠ nee), ze komen wel lager
+      const cus = o.cus && o.cus.length ? o.cus : o.cu ? [o.cu] : [];
+      if (!r.cuisAll && r.cuis.length && !(cus.some(x => r.cuis.includes(x)) || (o.osm && !cus.length))) return false;
+      if (r.diets.length && !r.diets.every(d => o.di.includes(d)) && !(o.osm && !o.di.length)) return false;
       return true;
     }
-    if (m === 'koffie') return !r.diets.length || r.diets.every(d => o.di.includes(d));
+    if (m === 'koffie') return !r.diets.length || r.diets.every(d => o.di.includes(d)) || (o.osm && !o.di.length);
     if (!r.moodsAll && r.moods.length && !has(o.m, r.moods)) return false;
     return true;
   };
@@ -371,7 +373,11 @@ export function mergeDeck(statics, titles) {
 /* ============ Volgorde (zacht) — alleen binnen het kader ============ */
 export function rankScore(o, r) {
   const u = S.user, g = grp(r.gid), gp = g?.prefs || {}, tags = [o.l, ...o.m, ...o.i]; let s = (o.r ?? 4.2) * 10;
-  if (o.osm) s += Math.max(0, 8 - kmTo(o, r) / 2);
+  if (o.osm) {
+    s += Math.max(0, 8 - kmTo(o, r) / 2);
+    if (r.v === 2 && !r.cuisAll && r.cuis?.length && !(o.cus || []).some(x => r.cuis.includes(x))) s -= 8;
+    if (r.v === 2 && r.diets?.length && !o.di.length) s -= 4;
+  }
   s += 5 * o.i.filter(i => u.ints.includes(i)).length;
   if (u.lvls.includes(o.l)) s += 4;
   if (o.cu && u.cuis.includes(o.cu)) s += 4;

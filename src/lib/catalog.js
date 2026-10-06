@@ -8,7 +8,7 @@ const KEY_BY_ID = {};
 Object.entries(GENRE_IDS).forEach(([k, ids]) => ids.forEach(id => { if (!KEY_BY_ID[id]) KEY_BY_ID[id] = k; }));
 const KIDS = [16, 10751, 10762];
 const EMO = { actie: '💥', avontuur: '🧭', komedie: '😂', drama: '🎭', thriller: '🔪', scifi: '🚀', fantasy: '🐉', misdaad: '🕵️', romantiek: '💘', animatie: '🎨', familie: '👨‍👩‍👧', horror: '👻', documentaire: '🎥', oorlog: '🎖️', reality: '📺' };
-const COLS = ['id', 'kind', 'tmdb_id', 'title', 'overview', 'poster', 'year', 'genres', 'rating', 'votes', 'popularity', 'adult', 'providers'].join(',');
+const COLS = ['id', 'kind', 'tmdb_id', 'title', 'overview', 'poster', 'year', 'genres', 'rating', 'votes', 'popularity', 'adult', 'providers', 'latin'].join(',');
 
 export function toOpt(t) {
   const keys = [...new Set((t.genres || []).map(g => KEY_BY_ID[g]).filter(Boolean))];
@@ -18,7 +18,7 @@ export function toOpt(t) {
     c: [t.kind === 'movie' ? 'film' : 'serie'], l: 'rustig', m: ['ontspannen', 'binnen', 'gezellig'], i: ['film', 'thuis'], io: 'binnen',
     p: 0, r: Math.round((Number(t.rating) || 0) * 5) / 10, score10: Number(t.rating) || 0, votesCount: t.votes || 0, km: 0, dur: 0, h: [0, 48], d: '0123456', g: [1, 20], b: 0,
     genre: keys[0], genres: keys, year: t.year, plat: (t.providers || []).map(p => STREAMS[p]).filter(Boolean).join(' · '),
-    desc: t.overview || 'Er is nog geen beschrijving beschikbaar.', kid, pet: 1, w: 1, alc: 'none', age: t.adult ? 18 : 0, di: [], food: false,
+    desc: t.overview || 'Er is nog geen beschrijving beschikbaar.', hide: t.latin === false, kid, pet: 1, w: 1, alc: 'none', age: t.adult ? 18 : 0, di: [], food: false,
   };
   TITLES[o.id] = o;
   return o;
@@ -42,7 +42,7 @@ export function titleKinds(r) {
 function query(r, select, head) {
   const kinds = titleKinds(r); if (!kinds.length) return null;
   const fs = r.v === 2 ? r.film : r;
-  let q = sb.from('titles').select(select, head ? { count: 'exact', head: true } : undefined).eq('available', true).in('kind', kinds)
+  let q = sb.from('titles').select(select, head ? { count: 'exact', head: true } : undefined).eq('available', true).eq('latin', true).in('kind', kinds)
     .overlaps('providers', fs.streams && fs.streams.length ? fs.streams : Object.keys(STREAMS));
   const g = (fs.allGenres ? [] : (fs.genres || [])).flatMap(k => GENRE_IDS[k] || []);
   if (g.length) q = q.overlaps('genres', g);

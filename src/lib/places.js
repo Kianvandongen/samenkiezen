@@ -3,7 +3,7 @@ import { sb } from './supabase';
 import { TITLE_CACHE as CACHE } from './titlesCache';
 
 const PHOTON = 'https://photon.komoot.io';
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 
 export function kmBetween(a, b, c, d) {
   const R = 6371, r = x => x * Math.PI / 180;
@@ -29,11 +29,13 @@ export async function searchLocations(q, signal) {
   const url = `${PHOTON}/api/?q=${encodeURIComponent(q.trim())}&limit=10&lat=52.1&lon=5.3&location_bias_scale=0.3`;
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error('Zoeken mislukt');
-  const js = await res.json(), seen = new Set(), out = [];
+  const js = await res.json(), seen = new Map(), out = [];
   for (const f of js.features || []) {
     const it = photonItem(f), key = it.main + '|' + it.sub;
-    if (!it.main || seen.has(key)) continue;
-    seen.add(key); out.push(it);
+    if (!it.main) continue;
+    // Bij dubbele treffers: het dorpscentrum (place) is beter dan het midden van de gemeentegrens
+    if (seen.has(key)) { if (f.properties?.osm_key === 'place') Object.assign(seen.get(key), { lat: it.lat, lon: it.lon }); continue; }
+    seen.set(key, it); out.push(it);
   }
   return out.slice(0, 7);
 }
@@ -45,8 +47,8 @@ export async function reverseLocation(lat, lon) {
 }
 
 /* ---------- Plekken rond de locatie ---------- */
-const CUIS_MAP = { italian: 'italiaans', pizza: 'pizza', sushi: 'sushi', japanese: 'sushi', burger: 'burgers', indonesian: 'indonesisch', lebanese: 'libanees', thai: 'thais', tapas: 'tapas', spanish: 'tapas', steak_house: 'steak', steak: 'steak' };
-const CUIS_EMOJI = { italiaans: '🍝', pizza: '🍕', sushi: '🍣', burgers: '🍔', indonesisch: '🍛', libanees: '🧆', thais: '🍜', tapas: '🥘', steak: '🥩' };
+const CUIS_MAP = { italian: 'italiaans', pasta: 'italiaans', pizza: 'pizza', sushi: 'sushi', japanese: 'sushi', burger: 'burgers', indonesian: 'indonesisch', lebanese: 'libanees', thai: 'thais', tapas: 'tapas', spanish: 'tapas', steak_house: 'steak', steak: 'steak', grill: 'steak', regional: 'hollands', dutch: 'hollands', french: 'frans', chinese: 'chinees', asian: 'aziatisch', vietnamese: 'aziatisch', korean: 'aziatisch', wok: 'aziatisch', greek: 'grieks', turkish: 'turks', kebab: 'turks', mexican: 'mexicaans', 'tex-mex': 'mexicaans', indian: 'indiaas', pancake: 'pannenkoeken', friture: 'friet', fries: 'friet', chips: 'friet', fish: 'vis', seafood: 'vis', fish_and_chips: 'vis' };
+const CUIS_EMOJI = { italiaans: '🍝', pizza: '🍕', sushi: '🍣', burgers: '🍔', indonesisch: '🍛', libanees: '🧆', thais: '🍜', tapas: '🥘', steak: '🥩', hollands: '🍽️', frans: '🥖', chinees: '🥡', aziatisch: '🍜', grieks: '🫒', turks: '🥙', mexicaans: '🌮', indiaas: '🍛', pannenkoeken: '🥞', friet: '🍟', vis: '🐟' };
 const CUIS_NL = { italian: 'Italiaans', pizza: 'Pizza', sushi: 'Sushi', japanese: 'Japans', burger: 'Burgers', indonesian: 'Indonesisch', lebanese: 'Libanees', thai: 'Thais', tapas: 'Tapas', spanish: 'Spaans', steak_house: 'Steakhouse', chinese: 'Chinees', indian: 'Indiaas', greek: 'Grieks', turkish: 'Turks', french: 'Frans', mexican: 'Mexicaans', asian: 'Aziatisch', regional: 'Hollands', dutch: 'Hollands', kebab: 'Kebab', chicken: 'Kip', fish: 'Vis', vietnamese: 'Vietnamees', korean: 'Koreaans', surinamese: 'Surinaams', german: 'Duits', coffee_shop: 'Koffie', cake: 'Taart', ice_cream: 'IJs', sandwich: 'Broodjes', breakfast: 'Ontbijt', friture: 'Friet', fries: 'Friet', snackbar: 'Snackbar', vegetarian: 'Vegetarisch', vegan: 'Vegan' };
 
 const SPORT = {
@@ -65,10 +67,10 @@ function classify(t) {
   const base = { l: 'rustig', m: ['gezellig', 'binnen'], i: [], io: 'binnen', dur: 120 };
   if (a === 'restaurant' || a === 'fast_food') {
     const raw = (t.cuisine || '').split(';').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const cu = raw.map(x => CUIS_MAP[x]).find(Boolean) || null;
+    const cus = [...new Set(raw.map(x => CUIS_MAP[x]).filter(Boolean))], cu = cus[0] || null;
     const fast = a === 'fast_food', delivers = t.delivery === 'yes' || (fast && t.takeaway !== 'no');
     const c = fast ? ['bestellen'] : delivers ? ['uiteten', 'bestellen'] : ['uiteten'];
-    return { ...base, c, cu, del: delivers ? 1 : 0, e: CUIS_EMOJI[cu] || (fast ? '🍟' : '🍽️'), m: ['gezellig', 'eten', 'binnen'], i: ['eten'], dur: fast ? 45 : 120, kindL: fast ? 'Snackbar / afhaal' : 'Restaurant', cuisL: raw.map(x => CUIS_NL[x] || x.replace(/_/g, ' ')).slice(0, 3).join(', ') };
+    return { ...base, c, cu, cus, del: delivers ? 1 : 0, e: CUIS_EMOJI[cu] || (fast ? '🍟' : '🍽️'), m: ['gezellig', 'eten', 'binnen'], i: ['eten'], dur: fast ? 45 : 120, kindL: fast ? 'Snackbar / afhaal' : 'Restaurant', cuisL: raw.map(x => CUIS_NL[x] || x.replace(/_/g, ' ')).slice(0, 3).join(', ') };
   }
   if (a === 'cafe') return { ...base, c: ['koffie'], e: '☕', m: ['gezellig', 'ontspannen', 'laagdrempelig', 'binnen'], i: ['eten'], dur: 90, kindL: 'Café / lunchroom' };
   if (['bar', 'pub', 'biergarten'].includes(a)) return { ...base, c: ['borrel'], e: a === 'biergarten' ? '🍺' : '🍻', m: ['gezellig', 'laagdrempelig', 'muziek', a === 'biergarten' ? 'buiten' : 'binnen'], i: ['muziek', 'nacht'], io: a === 'biergarten' ? 'buiten' : 'binnen', dur: 150, kindL: a === 'pub' ? 'Kroeg' : a === 'bar' ? 'Bar' : 'Biertuin' };
@@ -109,7 +111,7 @@ function toPlace(el, center) {
   const o = {
     id: `p${el.type[0]}${el.id}`, osm: 1, t: t.name, e: k.e, c: k.c, l: k.l, m: k.m, i: k.i, io: k.io,
     p: null, r: null, km, lat, lon, dur: k.dur, d: '0123456', h: null, hours: t.opening_hours || '', g: [1, 40], b: t.reservation === 'required' ? 1 : 0,
-    di: diets(t), cu: k.cu || null, del: k.del || 0, kindL: k.kindL, cuisL: k.cuisL || '', city, addr,
+    di: diets(t), cu: k.cu || null, cus: k.cus || [], del: k.del || 0, kindL: k.kindL, cuisL: k.cuisL || '', city, addr,
     web: t.website || t['contact:website'] || '', phone: t.phone || t['contact:phone'] || '', w: t.wheelchair === 'yes' ? 1 : 0,
     desc: [k.kindL + (k.cuisL ? ` · ${k.cuisL}` : ''), addr || city].filter(Boolean).join(' · '),
   };
@@ -138,12 +140,14 @@ export async function fetchPlaces(r) {
   if (memo.has(key)) return memo.get(key);
   const lines = [];
   mains.forEach(m => { const R = Math.round(radiusKm(r.km, m) * 1000); PARTS[m].forEach(p => lines.push(`${p}(around:${R},${r.lat},${r.lon});`)); });
-  const q = `[out:json][timeout:40];(${[...new Set(lines)].join('')});out center tags 3000;`;
+  const q = `[out:json][timeout:25];(${[...new Set(lines)].join('')});out center tags 3000;`;
   let js = null, err = null;
   for (const u of OVERPASS) {
     try {
-      const res = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) });
-      if (res.ok) { js = await res.json(); break; }
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 30000);
+      const res = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q), signal: ctl.signal });
+      clearTimeout(tm);
+      if (res.ok) { const j = await res.json(); if (j.remark && !(j.elements || []).length && /runtime error|timed out/i.test(j.remark)) { err = new Error(j.remark); continue; } js = j; break; }
       err = new Error('Plekken ophalen mislukt (' + res.status + ')');
     } catch (e) { err = e; }
   }

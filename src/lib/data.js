@@ -8,7 +8,7 @@ const INTS={eten:'Eten en drinken',film:'Films en series',muziek:'Muziek en uitg
 const TRANS={lopen:'Lopen',fiets:'Fiets',auto:'Auto',motor:'Motor',ov:'Openbaar vervoer'};
 const REACH={lopen:3,fiets:12,auto:250,motor:250,ov:80},SPEED={lopen:5,fiets:15,auto:45,motor:45,ov:25};
 const DIETS={veg:'Vegetarisch',vegan:'Vegan',halal:'Halal',gluten:'Glutenvrij',lactose:'Lactosevrij',allergie:'Allergievriendelijk'};
-const CUIS={italiaans:'Italiaans',sushi:'Sushi',burgers:'Burgers',indonesisch:'Indonesisch',libanees:'Libanees',thais:'Thais',tapas:'Tapas',steak:'Steak',pizza:'Pizza'};
+const CUIS={hollands:'Hollands / eetcafé',italiaans:'Italiaans',pizza:'Pizza',burgers:'Burgers',friet:'Friet en snacks',chinees:'Chinees',aziatisch:'Aziatisch',sushi:'Sushi / Japans',thais:'Thais',indonesisch:'Indonesisch',indiaas:'Indiaas',turks:'Turks / kebab',grieks:'Grieks',libanees:'Libanees',mexicaans:'Mexicaans',tapas:'Tapas / Spaans',frans:'Frans',steak:'Steak / grill',vis:'Vis',pannenkoeken:'Pannenkoeken'};
 const GENRES={actie:'Actie',avontuur:'Avontuur',komedie:'Komedie',drama:'Drama',thriller:'Thriller',scifi:'Sciencefiction',fantasy:'Fantasy',misdaad:'Misdaad',romantiek:'Romantiek',animatie:'Animatie',familie:'Familie',horror:'Horror',documentaire:'Documentaire',oorlog:'Oorlog',reality:'Reality'};
 const GENRE_IDS={actie:[28,10759],avontuur:[12,10759],komedie:[35],drama:[18],thriller:[53,9648],scifi:[878,10765],fantasy:[14,10765],misdaad:[80],romantiek:[10749],animatie:[16],familie:[10751,10762],horror:[27],documentaire:[99],oorlog:[10752,10768],reality:[10764]};
 const STREAMS={netflix:'Netflix',prime:'Prime Video'};

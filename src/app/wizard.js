@@ -4,13 +4,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LVLS, LVLEX, MOODS, INTS, TRANS, DIETS, RULES, STREAMS, GENRES, CUIS } from '../lib/data';
 import { countTitles, deckTitles, titleKinds } from '../lib/catalog';
-import { useStore, toast, errText, api, newDraft, draftFromRound, rnd, eligibleList, buildDeck, mergeDeck, grp, nameOf, ymd, dateNice, euro, pad, DAYN, MON, MAIN, DAYPARTS, sectionsOf, needsPlace, needsBudget, priceOf, rankScore, kmStr } from '../lib/store';
+import { useStore, toast, errText, api, newDraft, draftFromRound, rnd, eligibleList, buildDeck, mergeDeck, grp, nameOf, ymd, dateNice, euro, pad, DAYN, MON, MAIN, DAYPARTS, sectionsOf, needsPlace, needsBudget, fails, priceOf, rankScore, kmStr } from '../lib/store';
 import { useC, F, T, Field, Input, Chip, toggleIn, Box, Warn, Btn, Confirm, Section, Header } from '../components/ui';
 import { OptMini } from '../components/cards';
 import { LocationField } from '../components/LocationField';
 import { fetchPlaces, savePlaces } from '../lib/places';
 
 const ALL = '__alle__';
+const ROW_STEP = { Groep: 'eigen', Wat: 'wat', Kijken: 'kijken', Genres: 'kijken', Activiteit: 'activiteit', Eten: 'eten', Sfeer: 'sfeer', Wanneer: 'praktisch', Waar: 'praktisch', Budget: 'praktisch', Personen: 'praktisch', Besluitregel: 'beslissen' };
 const SECTION_TITLE = { kijken: 'Film of serie', activiteit: 'Activiteit', eten: 'Eten en drinken', sfeer: 'Sfeer' };
 const ACT_INTS = ['sport', 'games', 'natuur', 'creatief', 'cultuur', 'motor', 'muziek', 'dieren', 'tech', 'familie'];
 const SFEER = ['gezellig', 'ontspannen', 'romantisch', 'feestelijk', 'avontuurlijk', 'cultureel', 'luxe', 'laagdrempelig', 'muziek', 'buiten', 'binnen'];
@@ -50,7 +51,7 @@ export default function Wizard() {
   const dRef = useRef(null);
   if (!dRef.current) dRef.current = editing ? draftFromRound(editing) : newDraft(gid);
   const d = dRef.current, g = grp(gid);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => editing ? sectionsOf(dRef.current.main).length + 3 : 0);
   const [, force] = useState(0);
   const [tc, setTc] = useState(null);
   const [preview, setPreview] = useState([]);
@@ -230,7 +231,13 @@ export default function Wizard() {
         </Q>
         <Q label="Hoe ver willen jullie reizen?" done={d.km !== null}><Single opts={[[3, 'Max. 3 km'], [10, '10 km'], [25, '25 km'], [50, '50 km'], ['any', 'Maakt niet uit']]} val={d.km} onPick={v => up(x => { x.km = v; })} /></Q>
         {pState === 'busy' && <T v="small">Echte plekken rond {d.loc} zoeken…</T>}
-        {pState === 'ok' && <T v="small" c={c.yes}>{places.length.toLocaleString('nl-NL')} echte plekken gevonden binnen {d.km === 'any' ? 'de regio' : `${d.km} km`} van {d.loc}.</T>}
+        {pState === 'ok' && (() => {
+          const pass = L.filter(o => o.osm).length, why = {};
+          if (pass < places.length) places.forEach(o => fails(o, d).forEach(f => { why[f] = (why[f] || 0) + 1; }));
+          const WHY = { interesses: 'keuken, dieet of interesses', afstand: 'afstand of vervoer', categorie: 'soort plek' };
+          const top = Object.entries(why).sort((a, b) => b[1] - a[1]).map(([k]) => WHY[k] || k).slice(0, 2).join(' en ');
+          return <T v="small" c={places.length ? c.yes : c.later}>{places.length ? `${places.length.toLocaleString('nl-NL')} echte plekken gevonden binnen ${d.km === 'any' ? 'de regio' : `${d.km} km`} van ${d.loc.split(',')[0]}, ${pass.toLocaleString('nl-NL')} passen bij jullie keuzes.${pass < places.length && top ? ` De rest valt af door ${top}.` : ''}` : `Geen plekken gevonden binnen ${d.km} km van ${d.loc.split(',')[0]}. Kies een grotere afstand.`}</T>;
+        })()}
         {pState === 'err' && <Warn text="Plekken in de buurt ophalen lukte niet. Controleer je internet en kies de afstand opnieuw." />}
         <Q label="Hoe gaan jullie erheen? (optioneel)" done><Multi dict={TRANS} sel={d.trans} onToggle={v => up(x => toggleIn(x.trans, v))} /></Q>
       </>}
@@ -266,10 +273,12 @@ export default function Wizard() {
     if (needsBudget(d.main)) rows.push(['Budget', d.bmax === 'any' ? 'Maakt niet uit' : `Tot €${d.bmax} p.p.`], ['Personen', d.size]);
     rows.push(['Besluitregel', RULES[d.rule.type][0] + (d.rule.type === 'meerderheid' ? ` (${d.rule.pct}%)` : '') + (d.rule.type === 'koppel' ? ` (${d.rule.pair.map(nameOf).join(' + ')})` : '')]);
     body = <>
-      <Box style={{ paddingVertical: 4 }}>{rows.map(([a, b], i) => (
-        <View key={a} style={{ flexDirection: 'row', gap: 10, paddingVertical: 10, borderBottomWidth: i < rows.length - 1 ? 1 : 0, borderBottomColor: c.line }}>
+      {editing && <T v="small" style={{ fontSize: 14 }}>Tik op een regel om die keuze aan te passen. Stemmen op opties die blijven, tellen gewoon mee.</T>}
+      <Box style={{ paddingVertical: 4 }}>{rows.map(([a, b], i) => { const to = ROW_STEP[a] === 'eigen' ? null : steps.indexOf(ROW_STEP[a]); return (
+        <Pressable key={a} disabled={!(to >= 0)} onPress={() => goStep(to)} style={({ pressed }) => ({ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 10, borderBottomWidth: i < rows.length - 1 ? 1 : 0, borderBottomColor: c.line, opacity: pressed ? 0.6 : 1 })}>
           <T v="small" style={{ width: 96, fontFamily: F.semi }}>{a}</T><T v="body" style={{ flex: 1, fontSize: 14 }}>{String(b)}</T>
-        </View>))}</Box>
+          {to >= 0 && <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.purpleInk }}>Wijzig</Text>}
+        </Pressable>); })}</Box>
       <Section title={`Voorproefje (${n.toLocaleString('nl-NL')})`}>
         {n ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>{[...L.slice(0, 6), ...preview].slice(0, 14).map(o => <OptMini key={o.id} o={o} sub={o.tmdb ? o.plat : o.osm ? kmStr(o, d) : priceOf(o)} />)}</ScrollView>
           : <Warn text="Geen enkele optie past. Ga terug en verruim een keuze." />}
@@ -291,6 +300,7 @@ export default function Wizard() {
           </> : <T v="small">Kies wat jullie willen doen</T>}
         </View>
         {step > 0 && <Btn sm kind="ghost" title="Terug" onPress={() => goStep(step - 1)} />}
+        {editing && !last && <Btn sm kind="ghost" title="Overzicht" disabled={!!missing.length} onPress={() => missing.length ? toast(`Nog kiezen: ${missing.join(', ')}`) : goStep(steps.length - 1)} />}
         <Btn sm kind={last ? 'purple' : 'primary'} title={last ? (busy ? 'Bezig…' : editing ? 'Opslaan' : 'Start ronde') : 'Volgende'} disabled={last ? (!n || busy) : !!missing.length} onPress={last ? start : next} />
       </View>
       <Confirm state={cf} setState={setCf} />
