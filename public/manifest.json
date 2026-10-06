@@ -1,0 +1,25 @@
+{
+  "name": "SamenKiezen",
+  "short_name": "SamenKiezen",
+  "lang": "nl",
+  "description": "Samen snel kiezen wat jullie gaan doen, eten of kijken.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f3f9",
+  "theme_color": "#16205c",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
