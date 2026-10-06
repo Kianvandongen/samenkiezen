@@ -1,0 +1,12 @@
+[build]
+  command = "npm ci && sh build-web.sh"
+  publish = "web-build"
+
+[build.environment]
+  NODE_VERSION = "22"
+  EXPO_NO_TELEMETRY = "1"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
