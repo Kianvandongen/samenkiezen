@@ -29,6 +29,7 @@ export default function RoundInfo() {
             {admin && m.id !== 'me' && <Toggle on={m.active} label={`${nameOf(m.id)} actief`} onPress={() => api.member(g.id, m.id, 'toggle_active').catch(e => toast(errText(e)))} />}
           </Item>); })}
       </Section>
+      {r.status === 'active' && admin && r.v === 2 && <Btn icon="edit-2" title="Ronde aanpassen" onPress={() => router.push({ pathname: '/wizard', params: { rid } })} />}
       {r.status === 'active' && <>
         <Btn kind="ghost" icon="bell" title="Stuur een vriendelijke herinnering" onPress={() => { const w = actives(r).filter(m => m.id !== 'me' && doneCount(r, m.id) < tot); if (!w.length) return toast('Iedereen heeft al gestemd'); api.send(r.gid, rid, { text: `⏰ ${w.map(m => nameOf(m.id)).join(', ')}: nog even swipen voor "${r.title}"!` }).then(() => toast('Herinnering geplaatst in de chat'), e => toast(errText(e))); }} />
         {admin && <Btn kind="danger" title="Ronde nu afronden" onPress={() => setCf({ title: 'Ronde afronden?', text: 'Daarna kan niemand meer stemmen. Bij de regels Deadline en Willekeurig kiest de app nu de winnaar.', ok: 'Afronden', danger: true, fn: () => api.closeRound(rid).then(() => router.replace(`/matches/${rid}`), e => toast(errText(e))) })} />}

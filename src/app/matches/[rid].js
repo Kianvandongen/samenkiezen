@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { opt } from '../../lib/data';
-import { useStore, toast, errText, api, rnd, grp, actives, euro } from '../../lib/store';
+import { useStore, toast, errText, api, rnd, grp, actives, euro, priceOf } from '../../lib/store';
 import { useC, T, Screen, Header, Box, Item, Thumb, Icon, Btn, Section } from '../../components/ui';
 
 export default function Matches() {
@@ -17,7 +17,7 @@ export default function Matches() {
       {ms.length ? ms.map(m => { const o = opt(m.oid), y = m.yes; return (
         <Item key={m.id} onPress={() => router.push(`/match/${m.id}`)}>
           <Thumb o={o} />
-          <View style={{ flex: 1 }}><T v="b" numberOfLines={1}>{o.t}</T><T v="small">{y} van {m.act || a.length} ja · {euro(o.p)}{m.final ? ' · gekozen' : ''}</T></View>
+          <View style={{ flex: 1 }}><T v="b" numberOfLines={1}>{o.t}</T><T v="small">{y} van {m.act || a.length} ja · {priceOf(o)}{m.final ? ' · gekozen' : ''}</T></View>
           <Icon n="chevron-right" s={18} c={c.muted} />
         </Item>); }) : (
         <View style={{ alignItems: 'center', gap: 12, paddingTop: 40 }}>

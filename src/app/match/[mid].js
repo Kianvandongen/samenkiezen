@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { opt } from '../../lib/data';
-import { useStore, toast, errText, api, rnd, grp, actives, matchText, euro, dateNice, parseT, pad } from '../../lib/store';
+import { useStore, toast, errText, api, rnd, grp, actives, matchText, euro, dateNice, parseT, pad, priceOf } from '../../lib/store';
 import { useC, F, T, IBtn, Poster, Avs, DL, Btn, Icon, Tag } from '../../components/ui';
 import Confetti from '../../components/Confetti';
 import { tmdbUrl } from '../../lib/catalog';
@@ -12,7 +12,7 @@ import { tmdbUrl } from '../../lib/catalog';
 function gcal(o, r) {
   const d = r.date.replace(/-/g, ''), s = parseT(r.start); let e = parseT(r.end); if (e <= s) e += 24; e = Math.min(s + (o.dur || 120) / 60, e);
   const f = h => `${pad(Math.floor(h) % 24)}${pad(Math.round((h % 1) * 60))}00`;
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(o.t)}&dates=${d}T${f(s)}/${d}T${f(e)}&ctz=Europe/Amsterdam&location=${encodeURIComponent(o.t + ', ' + r.loc)}&details=${encodeURIComponent('Gekozen met SamenKiezen: ' + r.title)}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(o.t)}&dates=${d}T${f(s)}/${d}T${f(e)}&ctz=Europe/Amsterdam&location=${encodeURIComponent(o.t + ', ' + (o.addr || o.city || r.loc))}&details=${encodeURIComponent('Gekozen met SamenKiezen: ' + r.title)}`;
 }
 
 export default function Match() {
@@ -20,7 +20,7 @@ export default function Match() {
   const S = useStore(), c = useC(), ins = useSafeAreaInsets();
   const m = S.matches.find(x => x.id === mid); if (!m || !rnd(m.rid)) return null;
   const o = opt(m.oid), r = rnd(m.rid), g = grp(r.gid);
-  const wa = `https://wa.me/?text=${encodeURIComponent(`${matchText(m)} 📅 ${dateNice(r.date)} ${r.start} · ${o.tmdb ? '📺 ' + o.plat : '📍 ' + o.t + ', ' + r.loc + ' · ' + euro(o.p) + ' p.p.'}`)}`;
+  const wa = `https://wa.me/?text=${encodeURIComponent(`${matchText(m)} 📅 ${dateNice(r.date)} ${r.start} · ${o.tmdb ? '📺 ' + o.plat : '📍 ' + o.t + ', ' + r.loc + ' · ' + priceOf(o) + (o.p ? ' p.p.' : '')}`)}`;
   const Act = ({ n, l, url }) => <Pressable onPress={() => Linking.openURL(url)} accessibilityRole="link" style={{ flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12, borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: c.line }}><Icon n={n} s={22} /><Text style={{ fontFamily: F.semi, fontSize: 12, color: c.ink }}>{l}</Text></Pressable>;
   const close = () => router.canGoBack() ? router.back() : router.replace('/home');
   return (
@@ -32,9 +32,9 @@ export default function Match() {
         <Poster o={o} style={{ width: 140, height: 140, borderRadius: 36 }} fontSize={70} />
         <View style={{ gap: 6, maxWidth: 320, alignItems: 'center' }}><T v="h2" style={{ textAlign: 'center', fontSize: 21, lineHeight: 26 }}>{o.t}</T><T v="small" style={{ textAlign: 'center', fontSize: 14 }}>{matchText(m)}</T></View>
         <Avs ids={actives(r).map(x => x.id)} s={34} />
-        <View style={{ alignSelf: 'stretch' }}><DL rows={[['Wanneer', `${dateNice(r.date)}, ${r.start}`], ['Waar', o.tmdb ? o.plat : o.km ? `${r.loc} · ${o.km} km` : 'Thuis'], ['Prijs', o.tmdb ? 'Inbegrepen bij abonnement' : euro(o.p) + (o.p ? ' p.p.' : '')], ['Groep', g.name]]} /></View>
+        <View style={{ alignSelf: 'stretch' }}><DL rows={[['Wanneer', `${dateNice(r.date)}, ${r.start}`], ['Waar', o.tmdb ? o.plat : o.osm ? (o.addr || o.city || r.loc) : o.km ? `${r.loc} · ${o.km} km` : 'Thuis'], ['Prijs', o.tmdb ? 'Inbegrepen bij abonnement' : priceOf(o) + (o.p ? ' p.p.' : '')], ['Groep', g.name]]} /></View>
         <View style={{ flexDirection: 'row', gap: 8, alignSelf: 'stretch' }}>
-          {o.tmdb ? <Act n="play-circle" l="Trailer" url={`https://www.youtube.com/results?search_query=${encodeURIComponent(o.t + ' ' + (o.year || '') + ' trailer')}`} /> : <Act n="map-pin" l="Route" url={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.t + ' ' + r.loc)}`} />}
+          {o.tmdb ? <Act n="play-circle" l="Trailer" url={`https://www.youtube.com/results?search_query=${encodeURIComponent(o.t + ' ' + (o.year || '') + ' trailer')}`} /> : <Act n="map-pin" l="Route" url={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.t + ', ' + (o.addr || o.city || r.loc))}`} />}
           <Act n="calendar" l="Agenda" url={gcal(o, r)} />
           <Act n="share-2" l="WhatsApp" url={wa} />
           {o.tmdb ? <Act n="tv" l="Kijken" url={tmdbUrl(o)} /> : <Act n="credit-card" l={o.b ? 'Reserveren' : 'Info'} url={`https://www.google.com/search?q=${encodeURIComponent(o.t + ' reserveren')}`} />}

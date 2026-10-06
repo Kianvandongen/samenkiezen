@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OPTS, LVLS, INTS, CUIS, GENRES, REACH, SPEED, FOODCATS, STREAMS, CATS as CATS_L, opt } from './data';
 import { sb } from './supabase';
 import { ensureTitles } from './catalog';
+import { ensurePlaces, kmBetween } from './places';
 
 /* ============ Hulpfuncties ============ */
 export const uid = () => Math.random().toString(36).slice(2, 9);
@@ -15,7 +16,7 @@ export const DAYN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 const DAYL = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 export const MON = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 export const dateNice = s => { const d = new Date(s + 'T12:00'); return `${DAYL[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`; };
-export const euro = p => p === 0 ? 'Gratis' : '€' + (Number.isInteger(p) ? p : p.toFixed(2).replace('.', ','));
+export const euro = p => p == null ? 'Onbekend' : p === 0 ? 'Gratis' : '€' + (Number.isInteger(p) ? p : p.toFixed(2).replace('.', ','));
 export const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'zojuist' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' u' : Math.round(m / 1440) + ' d'; };
 export const durStr = m => !m ? '–' : m >= 1440 ? `${Math.round(m / 1440)} dagen` : m >= 60 ? `${Math.floor(m / 60)}u${m % 60 ? pad(m % 60) : ''}` : `${m} min`;
 const localDT = iso => { if (!iso) return ''; const d = new Date(iso); return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -120,10 +121,11 @@ export async function refresh() {
       finale: Object.fromEntries(fv.filter(x => x.round_id === r.id).map(x => [me(x.user_id), x.option_id])),
     };
   });
-  S.matches = mm.map(m => ({ id: m.id, rid: m.round_id, oid: m.option_id, type: m.match_type, at: Date.parse(m.matched_at), final: m.final, yes: m.yes_count, act: m.active_count }));
+  const deckOf = Object.fromEntries(S.rounds.map(r => [r.id, new Set(r.deck)]));
+  S.matches = mm.filter(m => m.final || !deckOf[m.round_id] || deckOf[m.round_id].has(m.option_id)).map(m => ({ id: m.id, rid: m.round_id, oid: m.option_id, type: m.match_type, at: Date.parse(m.matched_at), final: m.final, yes: m.yes_count, act: m.active_count }));
   S.msgs = ms.slice().reverse().map(m => ({ id: m.id, gid: m.group_id, rid: m.round_id || '', uid: m.user_id ? me(m.user_id) : '', type: m.type, text: m.text, img: m.image_url, oid: m.option_id, at: Date.parse(m.created_at), re: Object.fromEntries(Object.entries(m.reactions || {}).map(([k, v]) => [me(k), v])) }));
 
-  try { await ensureTitles([...S.rounds.flatMap(r => r.deck), ...S.matches.map(m => m.oid), ...S.msgs.filter(m => m.oid).map(m => m.oid)]); } catch (e) {}
+  try { const ids = [...S.rounds.flatMap(r => r.deck), ...S.matches.map(m => m.oid), ...S.msgs.filter(m => m.oid).map(m => m.oid)]; await Promise.all([ensureTitles(ids), ensurePlaces(ids)]); } catch (e) {}
 
   if (!firstLoad) {
     S.rounds.filter(r => !prev.rounds.has(r.id) && r.by !== 'me').forEach(r => { const g = grp(r.gid); notify('ronde', `${nameOf(r.by)} startte "${r.title}" in ${g?.name || 'je groep'}.`, r.id); toast(`Nieuwe ronde: ${r.title}`); });
@@ -190,6 +192,14 @@ export const api = {
     const deadline = d.deadline ? new Date(d.deadline).toISOString() : null;
     const { data, error } = await sb.rpc('create_round', { gid: d.gid, p_title: d.title.trim() || 'Nieuwe ronde', p_filters: filters, p_deck: deck, p_rule: rule, p_deadline: deadline });
     if (error) throw error; await refresh(); return data;
+  },
+  async updateRound(rid, d, deck) {
+    const skip = ['id', 'gid', 'by', 'title', 'rule', 'deadline', 'status', 'created', 'votes', 'saved', 'vetoed', 'progress', 'finale', 'deck'];
+    const filters = Object.fromEntries(Object.entries(d).filter(([k]) => !skip.includes(k)));
+    const rule = { ...d.rule, pair: d.rule.pair.map(unme) };
+    const deadline = d.deadline ? new Date(d.deadline).toISOString() : null;
+    const { error } = await sb.rpc('update_round', { rid, p_title: d.title.trim() || 'Nieuwe ronde', p_filters: filters, p_deck: deck, p_rule: rule, p_deadline: deadline });
+    if (error) throw error; await refresh();
   },
   async closeRound(rid) { const { error } = await sb.rpc('close_round', { rid }); if (error) throw error; await refresh(); },
   async finalize(mid) { const { error } = await sb.rpc('finalize_match', { mid }); if (error) throw error; await refresh(); },
@@ -272,6 +282,8 @@ function failsV2(o, r) {
   const f = [], has = (a, b) => a.some(x => b.includes(x));
   const mains = r.main.filter(m => MAIN[m].cats.some(c => o.c.includes(c)));
   if (!mains.length) return ['categorie'];
+  // Met een gekozen locatie tellen alleen echte plekken (geen voorbeelddata met vaste afstand)
+  if (r.lat != null && !o.osm && o.km > 0) return ['locatie'];
   const sectionOk = m => {
     if (m === 'activiteit') {
       if (r.lvls.length && !r.lvls.includes('gemengd') && !r.lvls.includes(o.l)) return false;
@@ -289,13 +301,14 @@ function failsV2(o, r) {
     return true;
   };
   if (!mains.some(sectionOk)) f.push('interesses');
-  if (o.p > num(r.bmax)) f.push('budget');
-  if (o.km > 0) {
+  if (o.p != null && o.p > num(r.bmax)) f.push('budget');
+  const km = kmTo(o, r);
+  if (km > 0) {
     let k = num(r.km);
     if (r.trans.length && !o.del) k = Math.min(k, Math.max(...r.trans.map(t => REACH[t])));
-    if (o.km > k) f.push('afstand');
+    if (km > k) f.push('afstand');
   }
-  if (o.h[1] < 48 && r.date && r.dayPart) {
+  if (o.h && o.h[1] < 48 && r.date && r.dayPart) {
     const day = new Date(r.date + 'T12:00').getDay(), [, s, e] = DAYPARTS[r.dayPart];
     const need = Math.min(o.dur / 60, e - s);
     if (!o.d.includes(String(day))) f.push('dag');
@@ -310,6 +323,7 @@ export function roundChips(r) {
   if (r.main.includes('kijken')) { out.push(...r.film.streams.map(s => STREAMS[s])); out.push(...(r.film.allGenres ? [] : r.film.genres.map(g => GENRES[g]))); if (r.film.minRating) out.push(`Score ${r.film.minRating}+`); }
   out.push(...r.lvls.map(x => LVLS[x]));
   if (needsBudget(r.main) && r.bmax && r.bmax !== 'any') out.push(`Max. €${r.bmax}`);
+  if (needsPlace(r.main) && r.loc) out.push(`📍 ${r.loc.split(',')[0]}`);
   if (needsPlace(r.main) && r.km && r.km !== 'any') out.push(`${r.km} km`);
   if (r.dayPart) out.push(DAYPARTS[r.dayPart][0]);
   return out;
@@ -343,7 +357,7 @@ export function fails(o, r) {
   if (o.tmdb && r.minRating && o.score10 < r.minRating) f.push('beoordeling');
   return f;
 }
-export const eligibleList = r => OPTS.filter(o => !fails(o, r).length);
+export const eligibleList = (r, extra = []) => [...OPTS, ...extra].filter(o => !fails(o, r).length);
 // Statische opties en catalogustitels proportioneel mengen
 export function mergeDeck(statics, titles) {
   if (!statics.length) return titles.map(o => o.id);
@@ -356,7 +370,8 @@ export function mergeDeck(statics, titles) {
 
 /* ============ Volgorde (zacht) — alleen binnen het kader ============ */
 export function rankScore(o, r) {
-  const u = S.user, g = grp(r.gid), gp = g?.prefs || {}, tags = [o.l, ...o.m, ...o.i]; let s = o.r * 10;
+  const u = S.user, g = grp(r.gid), gp = g?.prefs || {}, tags = [o.l, ...o.m, ...o.i]; let s = (o.r ?? 4.2) * 10;
+  if (o.osm) s += Math.max(0, 8 - kmTo(o, r) / 2);
   s += 5 * o.i.filter(i => u.ints.includes(i)).length;
   if (u.lvls.includes(o.l)) s += 4;
   if (o.cu && u.cuis.includes(o.cu)) s += 4;
@@ -385,19 +400,33 @@ export function notify(type, text, ref) { S.notifs.unshift({ id: uid(), type, te
 
 /* ============ Kaart-helpers ============ */
 export function kind(o) { if (o.c.some(c => ['film', 'serie', 'bioscoop'].includes(c)) && !o.c.includes('uiteten')) return 'film'; if (o.c[0] === 'thuis') return 'thuis'; if (['dagje', 'weekend', 'vakantie'].includes(o.c[0])) return 'dagje'; if (FOODCATS.includes(o.c[0])) return 'food'; return 'act'; }
-export function travel(o, r) {
-  if (o.km === 0) return o.c.includes('thuis') || kind(o) === 'film' ? 'Thuis' : 'Vanaf huis';
-  if (o.del && o.c[0] === 'bestellen') return `${o.dur} min bezorgen`;
-  const tr = (r && r.trans.length ? r.trans : S.user.trans).filter(t => REACH[t] >= o.km);
-  const t = tr.length ? [...tr].sort((a, b) => SPEED[b] - SPEED[a])[0] : 'auto';
-  return `${Math.max(3, Math.round(o.km / SPEED[t] * 60) + (t === 'ov' ? 8 : 0))} min ${t === 'ov' ? 'ov' : t}`;
+export function kmTo(o, r) {
+  if (o.lat != null && r && r.lat != null) return Math.round(kmBetween(r.lat, r.lon, o.lat, o.lon) * 10) / 10;
+  return o.km || 0;
 }
-export const openStr = o => o.h[1] >= 48 ? 'Altijd' : `${o.d.length === 7 ? 'Dagelijks' : o.d.split('').map(d => DAYN[d]).join(' ')} ${fmtH(o.h[0])}–${fmtH(o.h[1])}`;
+export const priceOf = o => o.osm ? o.kindL : euro(o.p);
+export const kmStr = (o, r) => { const k = kmTo(o, r); return k < 1 ? `${Math.round(k * 1000)} m` : `${String(k).replace('.', ',')} km`; };
+export function travel(o, r) {
+  const km = kmTo(o, r);
+  if (!km && !o.osm) return o.c.includes('thuis') || kind(o) === 'film' ? 'Thuis' : 'Vanaf huis';
+  if (o.del && o.c[0] === 'bestellen') return o.osm ? 'Bezorgen of afhalen' : `${o.dur} min bezorgen`;
+  const tr = (r && r.trans.length ? r.trans : S.user.trans).filter(t => REACH[t] >= km);
+  const t = tr.length ? [...tr].sort((a, b) => SPEED[b] - SPEED[a])[0] : 'auto';
+  return `${Math.max(3, Math.round(km * 1.3 / SPEED[t] * 60) + (t === 'ov' ? 8 : 0))} min ${t === 'ov' ? 'ov' : t}`;
+}
+export const openStr = o => !o.h ? (o.hours || 'Onbekend') : o.h[1] >= 48 ? 'Altijd' : `${o.d.length === 7 ? 'Dagelijks' : o.d.split('').map(d => DAYN[d]).join(' ')} ${fmtH(o.h[0])}–${fmtH(o.h[1])}`;
 export const ioStr = o => ({ binnen: 'Binnen', buiten: 'Buiten', beide: 'Binnen & buiten' })[o.io];
 
 /* ============ Rondes ============ */
 export function baseRound(o) {
   return Object.assign({ id: '', by: 'me', title: '', cats: [], lvls: [], moods: [], ints: [], loc: 'Venlo', km: 15, date: ymd(new Date()), start: '19:00', end: '23:30', bmin: 0, bmax: 35, size: 4, trans: ['fiets', 'auto'], io: [], book: 'any', alc: 'any', age: '', wheel: false, diets: [], pet: false, kid: false, streams: [], genres: [], minRating: 0, rule: { type: 'unaniem', pct: 70, pair: [] }, deadline: '', status: 'active', created: Date.now(), votes: { me: {} }, saved: [], vetoed: [], progress: {}, finale: {} }, o);
+}
+// Bestaande ronde aanpassen: begin met de huidige keuzes.
+export function draftFromRound(r) {
+  const base = newDraft(r.gid);
+  const copy = JSON.parse(JSON.stringify(r));
+  ['votes', 'saved', 'vetoed', 'progress', 'finale', 'deck', 'status', 'created', 'by'].forEach(k => delete copy[k]);
+  return { ...base, ...copy, film: { ...base.film, ...(copy.film || {}) }, rule: { ...base.rule, ...copy.rule }, deadlineChoice: copy.deadline ? 'huidig' : 'geen' };
 }
 // Nieuwe ronde: alles begint leeg, de maker kiest zelf.
 export function newDraft(gid) {
@@ -407,7 +436,7 @@ export function newDraft(gid) {
     lvls: [], ints: [], intsAll: false, io: null,
     cuis: [], cuisAll: false, diets: [], dietsNone: false,
     moods: [], moodsAll: false,
-    date: '', dayPart: '', start: '', end: '', loc: '', km: null, trans: [], bmax: null, size: null,
+    date: '', dayPart: '', start: '', end: '', loc: '', lat: null, lon: null, km: null, trans: [], bmax: null, size: null,
     rule: { type: null, pct: null, pair: [] }, deadlineChoice: null, deadline: '',
   });
 }

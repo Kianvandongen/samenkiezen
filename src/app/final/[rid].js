@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { opt } from '../../lib/data';
-import { useStore, toast, errText, api, rnd, actives, nameOf, euro } from '../../lib/store';
+import { useStore, toast, errText, api, rnd, actives, nameOf, euro, priceOf } from '../../lib/store';
 import { useC, T, Screen, Header, Item, Thumb, Icon, Box, Bar, Btn } from '../../components/ui';
 
 export default function Final() {
@@ -19,7 +19,7 @@ export default function Final() {
       {ms.map(m => { const o = opt(m.oid), on = F.me === o.id; return (
         <Item key={m.id} onPress={F.me ? undefined : () => pick(o.id)} style={on && { borderColor: c.purple, backgroundColor: c.purpleSoft }}>
           <Thumb o={o} />
-          <View style={{ flex: 1 }}><T v="b" numberOfLines={1}>{o.t}</T><T v="small">{euro(o.p)}{o.km ? ` · ${o.km} km` : ''}</T></View>
+          <View style={{ flex: 1 }}><T v="b" numberOfLines={1}>{o.t}</T><T v="small">{priceOf(o)}{o.km ? ` · ${String(o.km).replace('.', ',')} km` : ''}</T></View>
           {on && <Icon n="check" s={22} c={c.purpleInk} />}
         </Item>); })}
       {!!F.me && <Box style={{ gap: 10 }}>

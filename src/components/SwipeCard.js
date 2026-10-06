@@ -1,7 +1,7 @@
 import React, { useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
 import { View, Text, Animated, PanResponder, Dimensions, Pressable } from 'react-native';
 import { CATS, LVLS, MOODS, INTS, GENRES } from '../lib/data';
-import { euro, durStr, fmtH, kind, travel, ioStr } from '../lib/store';
+import { euro, durStr, fmtH, kind, travel, ioStr, kmStr } from '../lib/store';
 import { useC, F, T, Tag, Poster, Icon } from './ui';
 
 const W = Dimensions.get('window').width;
@@ -9,11 +9,12 @@ const TH = 100;
 
 export function cardStats(o, r) {
   const k = kind(o);
+  if (o.osm) return [['Soort', o.kindL], ['Afstand', kmStr(o, r)], ['Reistijd', travel(o, r)], [o.cuisL ? 'Keuken' : 'Plaats', o.cuisL || o.city || '–'], ['Open', o.hours ? 'Zie details' : 'Onbekend'], ['Dieet', o.di.length ? o.di.map(d => ({ veg: 'Vega', vegan: 'Vegan', halal: 'Halal', gluten: 'Glutenvrij', lactose: 'Lactosevrij' })[d]).join(', ') : '–']];
   if (o.tmdb) return [['Genre', o.genres.slice(0, 2).map(g => GENRES[g]).join(', ') || '–'], ['Jaar', o.year || '–'], ['Score', o.score10 ? `${o.score10.toFixed(1)}/10` : '–'], ['Kijken op', o.plat], ['Type', o.tmdb.kind === 'movie' ? 'Film' : 'Serie'], ['Kosten', 'Inbegrepen']];
   if (k === 'film') return [['Genre', GENRES[o.genre]], ['Duur', o.eps || durStr(o.dur)], ['Leeftijd', o.cert], ['Kijken', o.plat || (o.times || []).join(' · ')], ['Prijs', euro(o.p)], ['Taal', (o.lang || '').split(',')[0]]];
   if (k === 'thuis') return [['Kosten', euro(o.p) + (o.p ? ' p.p.' : '')], ['Tijd', durStr(o.dur)], ['Personen', `${o.g[0]}–${o.g[1]}`], ['Niveau', o.diff], ['Nodig', o.need?.[0]], ['Sfeer', MOODS[o.m[0]]]];
   if (k === 'dagje') return [['Kosten', euro(o.p) + ' p.p.'], ['Reistijd', travel(o, r)], ['Duur', durStr(o.dur)], ['Overnachten', o.over ? 'Ja' : 'Nee'], ['Weer', o.wx ? 'Afhankelijk' : 'Maakt niet uit'], ['Reserveren', o.b ? 'Ja' : 'Nee']];
-  return [['Prijs', euro(o.p) + (o.p ? ' p.p.' : '')], ['Afstand', o.km + ' km'], ['Reistijd', travel(o, r)], ['Duur', durStr(o.dur)], ['Open', o.h[1] >= 48 ? 'Altijd' : `${fmtH(o.h[0])}–${fmtH(o.h[1])}`], ['Reserveren', o.b ? 'Nodig' : 'Niet nodig']];
+  return [['Prijs', euro(o.p) + (o.p ? ' p.p.' : '')], ['Afstand', kmStr(o, r)], ['Reistijd', travel(o, r)], ['Duur', durStr(o.dur)], ['Open', o.h[1] >= 48 ? 'Altijd' : `${fmtH(o.h[0])}–${fmtH(o.h[1])}`], ['Reserveren', o.b ? 'Nodig' : 'Niet nodig']];
 }
 
 export function CardFace({ o, r }) {
@@ -21,8 +22,8 @@ export function CardFace({ o, r }) {
   return (
     <View style={{ flex: 1 }}>
       <Poster o={o} contain style={{ flex: o.poster ? 1.25 : 0.82 }} fontSize={78}>
-        <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(10,12,35,.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}><Text style={{ color: '#fff', fontFamily: F.semi, fontSize: 12 }}>{o.tmdb ? o.plat : CATS[o.c[0]]}</Text></View>
-        <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,.92)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, flexDirection: 'row', gap: 4, alignItems: 'center' }}><Icon n="star" s={12} c="#11163a" /><Text style={{ color: '#11163a', fontFamily: F.bold, fontSize: 12.5 }}>{o.tmdb ? o.score10.toFixed(1) : o.r.toFixed(1)}</Text></View>
+        <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(10,12,35,.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}><Text style={{ color: '#fff', fontFamily: F.semi, fontSize: 12 }}>{o.tmdb ? o.plat : o.osm ? o.kindL : CATS[o.c[0]]}</Text></View>
+        {(o.tmdb || o.r != null) && <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,.92)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, flexDirection: 'row', gap: 4, alignItems: 'center' }}><Icon n="star" s={12} c="#11163a" /><Text style={{ color: '#11163a', fontFamily: F.bold, fontSize: 12.5 }}>{o.tmdb ? o.score10.toFixed(1) : o.r.toFixed(1)}</Text></View>}
       </Poster>
       <View style={{ flex: 1, padding: 16, paddingBottom: 12, gap: 8 }}>
         <T v="h2" numberOfLines={2}>{o.t}</T>
@@ -30,9 +31,10 @@ export function CardFace({ o, r }) {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, maxHeight: 60, overflow: 'hidden' }}>
           {o.tmdb ? o.genres.slice(0, 3).map(g => <Tag key={g} label={GENRES[g]} tone="p" />) : <><Tag label={LVLS[o.l]} tone={o.l} />
           <Tag label={ioStr(o)} /></>}
+          {o.osm && o.di.includes('veg') && <Tag label="Vegetarisch" tone="licht" />}
           {!o.tmdb && o.m.filter(m => !['binnen', 'buiten'].includes(m)).slice(0, 2).map(m => <Tag key={m} label={MOODS[m]} tone="p" />)}
           {!o.tmdb && <Tag label={INTS[o.i[0]]} />}
-          {!o.tmdb && <Tag label={`${o.g[0]}–${o.g[1]} pers.`} />}
+          {!o.tmdb && !o.osm && <Tag label={`${o.g[0]}–${o.g[1]} pers.`} />}
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 'auto', rowGap: 8 }}>
           {cardStats(o, r).map(([a, b]) => (

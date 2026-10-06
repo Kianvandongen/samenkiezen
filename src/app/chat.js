@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { QUICK, opt } from '../lib/data';
-import { useStore, toast, errText, api, grp, rnd, nameOf, euro } from '../lib/store';
+import { useStore, toast, errText, api, grp, rnd, nameOf, euro, priceOf } from '../lib/store';
 import { useC, F, T, Header, Av, Avs, IBtn, Chip, Sheet, Item, Thumb } from '../components/ui';
 
 export default function Chat() {
@@ -35,7 +35,7 @@ export default function Chat() {
                   {!mine && <Text style={{ fontSize: 11, fontFamily: F.bold, color: c.muted, marginBottom: 2 }}>{nameOf(m.uid)}</Text>}
                   {m.type === 'img' && <Image source={{ uri: m.img }} style={{ width: 200, height: 200, borderRadius: 12 }} accessibilityLabel="Gedeelde foto" />}
                   {!!m.text && <Text style={{ fontFamily: F.body, fontSize: 14.5, color: mine ? c.onPrimary : c.ink }}>{m.text}</Text>}
-                  {o && <Pressable onPress={() => router.push({ pathname: '/detail/[oid]', params: { oid: o.id, rid: m.rid } })} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 6, borderRadius: 14, backgroundColor: c.surface2, marginTop: 4 }}><Thumb o={o} size={40} /><View style={{ flexShrink: 1 }}><T v="b" style={{ fontSize: 13 }} numberOfLines={1}>{o.t}</T><T v="small">{euro(o.p)} · bekijk</T></View></Pressable>}
+                  {o && <Pressable onPress={() => router.push({ pathname: '/detail/[oid]', params: { oid: o.id, rid: m.rid } })} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 6, borderRadius: 14, backgroundColor: c.surface2, marginTop: 4 }}><Thumb o={o} size={40} /><View style={{ flexShrink: 1 }}><T v="b" style={{ fontSize: 13 }} numberOfLines={1}>{o.t}</T><T v="small">{priceOf(o)} · bekijk</T></View></Pressable>}
                 </View>
                 <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, justifyContent: mine ? 'flex-end' : 'flex-start' }}>
                   {['🔥', '👍', '😂'].map(e => <Pressable key={e} accessibilityLabel={`Reageer ${e}`} onPress={() => api.react(m.id, e).catch(er => toast(errText(er)))} style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: m.re?.me === e ? c.purpleSoft : c.surface2 }}><Text style={{ fontSize: 12, color: c.ink }}>{e}{rc[e] ? ' ' + rc[e] : ''}</Text></Pressable>)}
@@ -55,7 +55,7 @@ export default function Chat() {
       <Sheet visible={share} onClose={() => setShare(false)}>
         <T v="h2" style={{ fontSize: 18 }}>Kaart delen in chat</T>
         <T v="small">Je stem blijft privé.</T>
-        {r?.deck.map(oid => { const o = opt(oid); return <Item key={oid} onPress={() => { setShare(false); post({ type: 'card', oid, text: 'Wat vinden jullie hiervan?' }); }}><Thumb o={o} /><View style={{ flex: 1 }}><T v="b" numberOfLines={1}>{o.t}</T><T v="small">{euro(o.p)}</T></View></Item>; })}
+        {r?.deck.map(oid => { const o = opt(oid); return <Item key={oid} onPress={() => { setShare(false); post({ type: 'card', oid, text: 'Wat vinden jullie hiervan?' }); }}><Thumb o={o} /><View style={{ flex: 1 }}><T v="b" numberOfLines={1}>{o.t}</T><T v="small">{priceOf(o)}</T></View></Item>; })}
       </Sheet>
     </KeyboardAvoidingView>
   );
